@@ -1,0 +1,91 @@
+// TRIPYYY database schema (PostgreSQL on Supabase).
+// After editing: npx prisma migrate dev --name <change>   (regenerates the client too)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Auth (NextAuth / Auth.js Prisma adapter models) ─────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  accounts      Account[]
+  sessions      Session[]
+  trips         Trip[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ── Trips ───────────────────────────────────────────────────────────────────
+
+/// A generated plan. Owned trips have a userId; guest share links store an ownerless
+/// snapshot that can only be revoked with the secret key kept on the guest's device.
+model Trip {
+  id           String    @id @default(cuid())
+  userId       String?
+  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  origin       String
+  destination  String
+  startDate    String
+  days         Int
+  /// TripFormValues — the traveller's answers
+  input        Json
+  /// Itinerary — validated AI output
+  itinerary    Json
+  provider     String
+  model        String
+  shareToken   String?   @unique
+  sharedAt     DateTime?
+  /// SHA-256 of the guest's revoke key (guest shares only)
+  revokeHash   String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([userId, createdAt])
+}

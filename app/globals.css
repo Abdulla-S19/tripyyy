@@ -1,26 +1,499 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains);
+  --font-heading: var(--font-playfair);
+  --font-display: var(--font-playfair);
+
+  --color-ink: var(--ink);
+  --color-deep: var(--deep);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-sand: var(--sand);
+  --color-slate: var(--slate);
+  --color-dusk: var(--dusk);
+  --color-jade: var(--jade);
+  --color-hairline: var(--hairline);
+  --color-on-gold: var(--on-gold);
+  --color-on-btn: #070a12;
+  --color-hairline-strong: var(--hairline-strong);
+  --color-btn-a: var(--btn-a);
+  --color-btn-b: var(--btn-b);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+
+  --shadow-glow-gold: 0 0 24px rgba(223, 175, 85, 0.35);
+  --shadow-glow-blue: 0 0 30px rgba(59, 111, 212, 0.18);
+  --shadow-card: var(--shadow-card-v);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/*
+ * Themes. Dark is the default ("night atlas"); [data-theme="light"] is "daylight atlas".
+ * The <head> script in app/layout.tsx sets data-theme before first paint (Dark / Light / System).
+ * Components only use these tokens, so every surface, map and chart follows the theme.
+ */
+:root {
+  --ink: #070a12;
+  --deep: #0b111c;
+  --surface: #101722;
+  --surface-2: #16202f;
+  --gold: #dfaf55;
+  --gold-soft: #f0cf8a;
+  --sand: #f5f1e8;
+  --slate: #9299a8;
+  --dusk: #3b6fd4;
+  --jade: #4bae8a;
+  --hairline: rgba(245, 241, 232, 0.08);
+  --hairline-strong: rgba(245, 241, 232, 0.16);
+  /* Dark text on gold stays dark in both themes; buttons keep the bright gold. */
+  --on-gold: #070a12;
+  --btn-a: #f0cf8a;
+  --btn-b: #dfaf55;
+  /* Background washes and map colours */
+  --tint-1: #16213a;
+  --tint-2: #131d33;
+  --tint-3: #0a0f1a;
+  --tint-4: #1c2944;
+  --tint-5: #0d1422;
+  --frame-a: rgba(22, 33, 58, 0.75);
+  --frame-b: rgba(7, 10, 18, 0.2);
+  --map-sea: #1b2d55;
+  --map-land: #101a2a;
+  --pin-hi: #fff3d6;
+  --glass-a: rgba(22, 32, 47, 0.72);
+  --glass-b: rgba(16, 23, 34, 0.56);
+  --gg-a: #f0cf8a;
+  --gg-b: #dfaf55;
+  --gg-c: #b8862f;
+  --shadow-card-v: 0 12px 48px rgba(0, 0, 0, 0.45);
+  --shadow-pop: 0 24px 64px rgba(0, 0, 0, 0.6);
+
+  --background: var(--ink);
+  --foreground: var(--sand);
+  --card: var(--surface);
+  --card-foreground: var(--sand);
+  --popover: var(--surface-2);
+  --popover-foreground: var(--sand);
+  --primary: var(--gold);
+  --primary-foreground: var(--ink);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--sand);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--slate);
+  --accent: var(--surface-2);
+  --accent-foreground: var(--sand);
+  --destructive: #e5645a;
+  --border: var(--hairline);
+  --input: rgba(245, 241, 232, 0.12);
+  --ring: var(--gold);
+  --radius: 0.75rem;
+
+  color-scheme: dark;
+}
+
+/* Daylight atlas: warm paper, white cards, deep-navy ink, gold deepened so text stays readable. */
+:root[data-theme="light"] {
+  --ink: #f6f3ec;
+  --deep: #efeae0;
+  --surface: #ffffff;
+  --surface-2: #f4f0e8;
+  --gold: #9c6a14;
+  --gold-soft: #86590f;
+  /* bg-gold is the deep gold here, so text on it turns white; buttons keep bright gold + dark text. */
+  --on-gold: #ffffff;
+  --sand: #161b26;
+  --slate: #586070;
+  --dusk: #2d5cbd;
+  --jade: #1d7757;
+  --hairline: rgba(22, 27, 38, 0.1);
+  --hairline-strong: rgba(22, 27, 38, 0.2);
+  --tint-1: #e2e9f5;
+  --tint-2: #e7ecf5;
+  --tint-3: #f1eee7;
+  --tint-4: #dde5f3;
+  --tint-5: #eeeae2;
+  --frame-a: rgba(255, 255, 255, 0.85);
+  --frame-b: rgba(246, 243, 236, 0.4);
+  --map-sea: #cadbf2;
+  --map-land: #f8f4eb;
+  --pin-hi: #ffffff;
+  --glass-a: rgba(255, 255, 255, 0.92);
+  --glass-b: rgba(255, 255, 255, 0.82);
+  --gg-a: #c9912b;
+  --gg-b: #a8741a;
+  --gg-c: #7a520e;
+  --shadow-card-v: 0 12px 40px rgba(22, 27, 38, 0.1);
+  --shadow-pop: 0 24px 60px rgba(22, 27, 38, 0.18);
+
+  --destructive: #c2413a;
+  --input: rgba(22, 27, 38, 0.14);
+
+  color-scheme: light;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+  ::selection {
+    background: rgba(223, 175, 85, 0.3);
+    color: var(--sand);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .glass {
+    background: linear-gradient(180deg, var(--glass-a), var(--glass-b));
+    /* Unprefixed only: the CSS minifier adds -webkit- itself (listing both made it keep just the prefixed one). */
+    backdrop-filter: blur(18px) saturate(140%);
+    border: 1px solid var(--hairline);
+  }
+  .text-gold-gradient {
+    background: linear-gradient(100deg, var(--gg-a) 0%, var(--gg-b) 45%, var(--gg-c) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .eyebrow {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  .grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
+.range-gold {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f0cf8a, #dfaf55) 0 / var(--pct, 0%) 100% no-repeat, var(--surface-2);
+  cursor: pointer;
+}
+.range-gold::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--sand);
+  border: 4px solid var(--gold);
+  box-shadow: 0 0 0 6px rgba(223, 175, 85, 0.15), 0 0 18px rgba(223, 175, 85, 0.5);
+  transition: transform 0.15s;
+}
+.range-gold::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--sand);
+  border: 4px solid var(--gold);
+  box-shadow: 0 0 0 6px rgba(223, 175, 85, 0.15), 0 0 18px rgba(223, 175, 85, 0.5);
+}
+.range-gold:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.range-gold:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 6px;
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.tripyyy-popup .maplibregl-popup-content {
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 8px 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.tripyyy-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+  border-top-color: var(--surface-2);
+}
+.maplibregl-ctrl-group {
+  background: var(--surface-2) !important;
+  border: 1px solid var(--hairline);
+}
+.maplibregl-ctrl-group button + button {
+  border-top-color: var(--hairline) !important;
+}
+.maplibregl-ctrl-group .maplibregl-ctrl-icon {
+  filter: invert(1) opacity(0.8);
+}
+.maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--ink) 75%, transparent) !important;
+  color: var(--slate);
+}
+:root[data-theme="light"] .maplibregl-ctrl-group .maplibregl-ctrl-icon {
+  filter: opacity(0.75);
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--slate) !important;
+}
+
+/* Print-only itinerary document (app/trip/[id]/components/PrintItinerary.tsx). */
+@page {
+  size: A4;
+  margin: 14mm 13mm 16mm;
+}
+@media print {
+  :root {
+    color-scheme: light;
+    --background: #ffffff;
+    --foreground: #16181d;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #16181d !important;
+  }
+  .print-doc {
+    font-family: var(--font-inter), system-ui, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.45;
+    color: #16181d;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-doc h1,
+  .print-doc h2 {
+    font-family: var(--font-playfair), Georgia, serif;
+    color: #0d1017;
+    break-after: avoid;
+  }
+  .print-doc h1 {
+    font-size: 24pt;
+    line-height: 1.1;
+    margin: 2mm 0 2mm;
+  }
+  .print-doc h2 {
+    font-size: 13pt;
+    margin: 0 0 2mm;
+  }
+  .pd-header {
+    border-bottom: 2px solid #b8862f;
+    padding-bottom: 4mm;
+    margin-bottom: 5mm;
+  }
+  .pd-brand {
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #8a6112;
+  }
+  .pd-summary {
+    color: #444a55;
+    font-size: 10pt;
+  }
+  .pd-facts {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 6mm;
+  }
+  .pd-facts th,
+  .pd-facts td {
+    padding: 1.6mm 2mm;
+    border-bottom: 1px solid #e3e3e3;
+    text-align: left;
+    vertical-align: top;
+  }
+  .pd-facts th {
+    width: 18%;
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+  .pd-block {
+    margin-bottom: 6mm;
+    break-inside: avoid;
+  }
+  .pd-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .pd-table th {
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6b7280;
+    text-align: left;
+    border-bottom: 1.5px solid #cfcfcf;
+    padding: 1.4mm 2mm;
+  }
+  .pd-table td {
+    border-bottom: 1px solid #e8e8e8;
+    padding: 2mm;
+    vertical-align: top;
+  }
+  .pd-table tr {
+    break-inside: avoid;
+  }
+  .pd-table p + p {
+    margin-top: 0.8mm;
+  }
+  .pd-budget {
+    max-width: 110mm;
+  }
+  .pd-total td {
+    font-weight: 700;
+    border-top: 1.5px solid #cfcfcf;
+  }
+  .pd-num {
+    text-align: right !important;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .pd-time {
+    width: 17mm;
+    white-space: nowrap;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .pd-time .pd-muted {
+    display: block;
+    font-weight: 400;
+  }
+  .pd-muted {
+    color: #6b7280;
+  }
+  .pd-note {
+    margin-top: 2mm;
+    color: #444a55;
+  }
+  .pd-item-title {
+    font-weight: 600;
+    color: #0d1017;
+  }
+  .pd-kind {
+    display: inline-block;
+    font-size: 6.5pt;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #8a6112;
+    border: 1px solid #d9c08a;
+    border-radius: 2px;
+    padding: 0 1.2mm;
+    margin-right: 1mm;
+    vertical-align: 1px;
+  }
+  .pd-tip {
+    color: #7a5610;
+  }
+  .pd-day {
+    margin-bottom: 7mm;
+  }
+  .pd-day-head {
+    background: #f6f1e6;
+    border-left: 3px solid #b8862f;
+    padding: 2.5mm 3mm;
+    margin-bottom: 1mm;
+    break-after: avoid;
+  }
+  .pd-day-head p {
+    color: #555b66;
+    font-size: 8.5pt;
+  }
+  .pd-columns {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 8mm;
+  }
+  .pd-columns ul {
+    padding-left: 4mm;
+    list-style: disc;
+  }
+  .pd-columns li + li {
+    margin-top: 1mm;
+  }
+  .pd-checklist {
+    list-style: none !important;
+    padding-left: 0 !important;
+  }
+  .pd-checklist li::before {
+    content: "";
+    display: inline-block;
+    width: 2.6mm;
+    height: 2.6mm;
+    border: 1px solid #8a8f99;
+    border-radius: 0.6mm;
+    margin-right: 2mm;
+    vertical-align: -0.3mm;
+  }
+  .pd-footer {
+    margin-top: 6mm;
+    padding-top: 3mm;
+    border-top: 1px solid #e3e3e3;
+    font-size: 7.5pt;
+    color: #6b7280;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

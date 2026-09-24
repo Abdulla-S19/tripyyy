@@ -114,6 +114,7 @@ export async function runChain(
     try {
       const data = await callers[ref.provider](ref.model, trip, {
         feedback: opts.feedback,
+        task: opts.task,
         signal: ctl.signal,
         onText: (d) => {
           streamed = true;

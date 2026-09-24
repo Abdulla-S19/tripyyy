@@ -21,6 +21,8 @@ export const cloud = {
   list: () => call<{ trips: SavedTrip[] }>("/api/trips").then((r) => r.trips),
   get: (id: string) => call<{ trip: SavedTrip }>(`/api/trips/${encodeURIComponent(id)}`).then((r) => r.trip),
   remove: (id: string) => call<void>(`/api/trips/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  updateItinerary: (id: string, itinerary: SavedTrip["itinerary"]) =>
+    call<void>(`/api/trips/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ itinerary }) }),
   import: (trips: SavedTrip[]) =>
     call<{ saved: { localId: string; trip: SavedTrip }[] }>("/api/trips/import", {
       method: "POST",

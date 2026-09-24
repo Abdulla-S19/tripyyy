@@ -1,17 +1,28 @@
 import { LEG_MODES, MOODS, RENTAL_CARS, TRANSPORT_MODES, currencyOf } from "@/lib/trip-options";
+import { fixedJourneys } from "@/lib/replan";
 import { addDays, tripLegs, tripNights, type TripFormValues } from "@/lib/trip-schema";
+import { dayTotal, money } from "@/lib/trip-view";
+import type { Itinerary } from "@/types/itinerary";
 
 export const SYSTEM_PROMPT = `You are TRIPYYY, an expert Indian travel planner who knows buses, trains, roads, food and local customs across India.
 You turn a traveller's brief into a complete, realistic, hour-by-hour itinerary.
 
 Rules:
-- Plan every day from wake-up to night: transport, check-in/check-out, breakfast, lunch, snacks, dinner, sights and rest. 5–9 items per day.
+- Plan every day from wake-up to night: transport, check-in/check-out, breakfast, lunch, snacks, dinner, sights and rest. 6–12 items per day, counting the local hops below.
 - Day 1 starts at the given departure time from the starting city. The final day ends when the traveller arrives at their end point.
 - Travel legs must be realistic: real journey durations, sensible departure times, real operators (KSRTC, TNSTC, KSRTC Swift, IRCTC trains, IndiGo, etc.).
   Only name a specific train or bus service if you are confident it runs on that route; otherwise describe it generically (e.g. "Express train, chair car"). Never invent train numbers.
   Put "verify timings on IRCTC / redBus / the operator site" style advice in bookingTip.
 - Food: name real, well-known local places when confident; otherwise describe the kind of place and dish. Suggest regional dishes. Give up to 3 alternatives.
-- Respect the moods — they decide which places and activities you choose.
+- Getting between places: whenever two consecutive items in a day are more than a 10-minute walk apart, put a transport item between them for that hop:
+  kind "transport", the right mode (walk, auto, cab, bus, metro, boat, bike…), operator = the app or service (Uber, Ola, Rapido, Namma Yatri, city bus, metro, ferry/water metro),
+  from and to, time–endTime covering the realistic travel time, and the fare per person as costPerPerson. Match the hop to the travel style, group size and luggage.
+  When the next place is within about a 10-minute walk, do not add an item; start that item's detail with "5 min walk from <previous place>." instead.
+  Order each day's places to avoid back-and-forth across town.
+- Moods decide the plan: choose the places and activities that best fit them (see "What the moods mean" in the brief). When several moods are chosen, weave all of them into every day where the location allows, rather than one mood per day.
+- Pick the best of each kind: the most popular, well-reviewed and reputable place, experience or operator in that area, not a random one.
+  Say in a few words in detail why it's worth it (e.g. "Kerala's longest zipline", "the oldest synagogue in the Commonwealth", "the go-to spot for …").
+  Never invent star ratings or review counts. For adventure activities choose licensed, safety-certified operators, and flag seasonal closures (e.g. rafting in the monsoon) in bookingTip.
 - Respect the budget: costPerPerson is per person in the trip currency. Stays are per person per night (room cost divided by occupants). Keep the trip total at or under the budget where possible; if impossible, say so in budget.note.
 - Children change pacing: shorter sightseeing blocks, earlier dinners.
 - Times are 24-hour HH:MM and strictly increase within a day. Overnight journeys end on the next day's first item.
@@ -21,6 +32,23 @@ Rules:
 - Use empty strings or 0 for fields that do not apply. Output only JSON that matches the schema.`;
 
 const moodLabel = (id: string) => MOODS.find((m) => m.id === id)?.label ?? id;
+
+/** What each mood should turn into on the ground, so the model doesn't guess from one word. */
+const MOOD_BRIEF: Record<string, string> = {
+  adventure: "treks, rafting, paragliding, ziplines, kayaking, off-road jeep safaris, caving, with licensed operators",
+  mountain: "viewpoints, hill walks, tea/coffee estates, sunrise and sunset points, toy trains, cool-climate stays",
+  food: "the dishes the region is known for, famous old eateries, street-food lanes, markets and a food walk",
+  cultural: "heritage sites, forts, palaces, museums, historic quarters, living art forms and performances (e.g. Kathakali, Theyyam), craft villages",
+  romantic: "sunset spots, scenic cafés, boat rides, quiet viewpoints, candle-lit dinners, stays with a view",
+  family: "easy-paced sights, parks, zoos, aquariums, museums kids enjoy, safe beaches; fewer long walks",
+  wildlife: "national parks, sanctuaries, jungle safaris at the right time of day, bird-watching, elephant camps that treat animals ethically",
+  spiritual: "famous temples, churches, mosques and gurudwaras, ghats, ashrams, prayer and aarti timings, dress codes",
+  beach: "the best beaches for swimming and sunsets, water sports, beach shacks, lighthouses",
+  nightlife: "well-known bars, live music, night markets and late-night food streets",
+  relaxing: "fewer items, slow mornings, spas or Ayurveda, lakeside or garden time, cafés; no rushed days",
+  photography: "golden-hour viewpoints, colourful streets and markets, iconic landmarks at the best light",
+  shopping: "famous markets and bazaars, local crafts, textiles, spices and what to bargain for",
+};
 
 /** Concrete booking classes per travel style, so "budget" never quietly becomes 3AC and a 4-star hotel. */
 const STYLE_RULES: Record<string, string> = {
@@ -123,7 +151,13 @@ ${returnRule}
 Dates covered: ${trip.departDate} to ${endDate} — exactly ${totalDays} day(s), numbered 1..${totalDays}.
 
 Travellers: ${trip.adults} adult(s)${trip.children ? `, ${trip.children} child(ren) aged 2–12` : ""} (${travellers} total)
-Moods: ${moods.join(", ")}${trip.customMoods?.length ? " (the last ones were written by the traveller — take them literally)" : ""}
+Moods: ${moods.join(", ")}${trip.customMoods?.length ? " (the last ones were written by the traveller — take them literally)" : ""}${
+    trip.moods.length
+      ? `
+What the moods mean:
+${trip.moods.map((id) => `  - ${moodLabel(id)}: ${MOOD_BRIEF[id] ?? "places and activities that match it"}`).join("\n")}`
+      : ""
+  }
 Budget: ${currency.symbol}${trip.budget} per person for the whole trip (currency ${trip.currency})
 Travel style: ${STYLE_RULES[trip.travelStyle ?? "balanced"]}
   Priority when style and budget disagree: never exceed the budget for a budget-friendly trip; for other styles stay as close to the style as the budget allows and explain any downgrade in budget.note.
@@ -131,4 +165,57 @@ Transport:
 ${transport.startsWith("  -") ? transport : `  ${transport}`}
 
 Return the itinerary with currency "${trip.currency}".`;
+}
+
+/** Re-plan one day of an existing itinerary, keeping it joined up with the days around it. */
+export function buildDayPrompt(trip: TripFormValues, it: Itinerary, dayNo: number, request: string) {
+  const day = it.days.find((d) => d.day === dayNo);
+  if (!day) throw new Error(`Day ${dayNo} is not in this itinerary`);
+  const others = it.days.filter((d) => d.day !== dayNo);
+  const prev = it.days.find((d) => d.day === dayNo - 1);
+  const next = it.days.find((d) => d.day === dayNo + 1);
+  const last = day.items[day.items.length - 1];
+  const endsAt = last ? last.to || last.location || day.city : day.city;
+  const journeys = fixedJourneys(day);
+  const used = others.flatMap((d) =>
+    d.items.filter((i) => i.kind !== "transport" && i.kind !== "stay").map((i) => `  - Day ${d.day}: ${i.title}${i.location ? ` (${i.location})` : ""}`)
+  );
+  const stays = [...new Set(others.flatMap((d) => d.items.filter((i) => i.kind === "stay").map((i) => i.title)))];
+  const dayCost = dayTotal(day);
+  const left = trip.budget - others.reduce((n, d) => n + dayTotal(d), 0);
+  const cost =
+    left <= 0
+      ? `The trip is already at or over its budget of ${money(trip.budget, trip.currency)} per person, so this day should cost no more than now (${money(dayCost, trip.currency)}).`
+      : `This day now costs ${money(dayCost, trip.currency)} per person; with the rest of the trip, ${money(left, trip.currency)} per person is left for it. Stay around that unless the request asks for cheaper or more premium.`;
+
+  return `Re-plan ONE day of an existing trip. Return only that day as a single day object matching the schema, not a whole itinerary.
+
+The original trip brief, for context only (do not plan the other days again):
+"""
+${buildTripPrompt(trip)}
+"""
+
+The rest of the trip stays exactly as it is:
+${others.map((d) => `  - Day ${d.day} (${d.date}): ${d.title}, night in ${d.city}`).join("\n")}
+
+Day to re-plan: Day ${dayNo} (${day.date}), currently "${day.title}", night in ${day.city}.
+Its current plan:
+${day.items.map((i) => `  ${i.time}${i.endTime ? `–${i.endTime}` : ""} [${i.kind}] ${i.title}`).join("\n")}
+
+What the traveller wants changed on this day: "${request.trim() || "Nothing specific. Give a fresh, clearly different take on this day."}"
+
+Rules for the new Day ${dayNo}:
+- Keep "day": ${dayNo} and "date": "${day.date}".
+- ${prev ? `It starts where Day ${dayNo - 1} ended: the traveller woke up in ${prev.city}.` : `It starts at ${trip.departTime} from ${trip.origin}.`} ${
+    next
+      ? `It must end with the night in ${day.city}, because Day ${dayNo + 1} continues from there. Keep "city": "${day.city}".`
+      : `It is the last day, so it must still end at ${endsAt}.`
+  }
+${journeys.length ? `- Keep these journeys and their timings unless the request asks to change them; the rest of the trip depends on them:\n${journeys.map((j) => `    ${j}`).join("\n")}\n` : ""}${
+    stays.length ? `- Keep the same stay as the other nights (${stays.join("; ")}) unless the request is about where to stay.\n` : ""
+  }- Do NOT repeat anything already planned on other days (sights, activities, restaurants, cafés, experiences):
+${used.length ? used.join("\n") : "  (nothing yet)"}
+  Pick different, well-reviewed options instead.
+- Follow the travel style, moods and "getting between places" rules.
+- Money: ${cost} Use realistic local prices. Only the overnight stay item carries the room cost; freshening up or checking out at the hotel costs 0.`;
 }

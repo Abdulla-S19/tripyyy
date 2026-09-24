@@ -1,4 +1,5 @@
 import "server-only";
+import { dayProblems } from "@/lib/replan";
 import { tripNights, type TripFormValues } from "@/lib/trip-schema";
 import { itineraryDaySchema, itinerarySchema, type Itinerary, type ItineraryDay } from "@/types/itinerary";
 import { modelChain, runChain } from "./chain";
@@ -6,7 +7,8 @@ import { DayExtractor } from "./day-stream";
 import { callGemini } from "./gemini";
 import { callMock } from "./mock";
 import { callOpenAI } from "./openai";
-import { normalizeItinerary } from "./schema";
+import { buildDayPrompt } from "./prompt";
+import { dayJsonSchema, normalizeItinerary } from "./schema";
 import { AIError, type ModelCaller, type ProviderId } from "./types";
 
 const callers: Record<ProviderId, ModelCaller> = { gemini: callGemini, openai: callOpenAI, mock: callMock };
@@ -65,6 +67,59 @@ export async function generateItinerary(trip: TripFormValues, hooks: GenerationH
   }
   if (usable) return usable;
   throw new AIError(`The AI returned an itinerary we couldn't use (${feedback}).`, "invalid");
+}
+
+export type ReplanResult = { itinerary: Itinerary; day: ItineraryDay; provider: string; model: string };
+
+/**
+ * Re-plans one day and slots it back into the itinerary. The answer is checked for places already
+ * used on other days; if any slipped through, the model gets one retry told exactly which to replace.
+ */
+export async function replanDay(
+  trip: TripFormValues,
+  itinerary: Itinerary,
+  dayNo: number,
+  request: string,
+  opts: { signal?: AbortSignal; onRetry?: (reason: string) => void } = {}
+): Promise<ReplanResult> {
+  const current = itinerary.days.find((d) => d.day === dayNo);
+  if (!current) throw new AIError(`Day ${dayNo} isn't part of this trip.`, "invalid");
+  const others = itinerary.days.filter((d) => d.day !== dayNo);
+  const prompt = buildDayPrompt(trip, itinerary, dayNo, request);
+  let feedback: string | undefined;
+  let usable: ReplanResult | undefined;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) opts.onRetry?.("Fixing repeated places and prices");
+    const { data, ref } = await runChain(modelChain(), callers, trip, {
+      feedback,
+      signal: opts.signal,
+      task: { name: "day", prompt, jsonSchema: dayJsonSchema, zod: itineraryDaySchema },
+      onFallback: () => opts.onRetry?.("Switching to a less busy planner"),
+    });
+
+    const parsed = itineraryDaySchema.safeParse(data);
+    if (!parsed.success) {
+      feedback = parsed.error.issues
+        .slice(0, 8)
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ");
+      continue;
+    }
+    // The day's place in the trip is fixed, whatever the model wrote.
+    const day: ItineraryDay = { ...parsed.data, day: dayNo, date: current.date, city: parsed.data.city || current.city };
+    const days = itinerary.days.map((d) => (d.day === dayNo ? day : d));
+    // The old budget note may talk about things this day no longer has; let it be recomputed.
+    const next = normalizeItinerary({ ...itinerary, days, budget: { ...itinerary.budget, note: "" } }, trip.budget);
+    usable = { itinerary: next, day: next.days.find((d) => d.day === dayNo)!, provider: ref.provider, model: ref.model };
+
+    const problems = dayProblems(day, current, others, request, trip.currency);
+    if (!problems.length) return usable;
+    console.warn(`[replan] day ${dayNo} needs another pass: ${problems.join(" | ")}`);
+    feedback = problems.join("\n");
+  }
+  if (usable) return usable; // an imperfect day beats failing the whole request
+  throw new AIError(`The AI returned a day we couldn't use (${feedback}).`, "invalid");
 }
 
 export { AIError };

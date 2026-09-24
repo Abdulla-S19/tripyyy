@@ -23,11 +23,11 @@ export const callGemini: ModelCaller = async (model, trip, opts) => {
   try {
     const stream = await getClient().models.generateContentStream({
       model,
-      contents: withFeedback(buildTripPrompt(trip), opts.feedback),
+      contents: withFeedback(opts.task?.prompt ?? buildTripPrompt(trip), opts.feedback),
       config: {
         systemInstruction: SYSTEM_PROMPT,
         responseMimeType: "application/json",
-        responseJsonSchema: itineraryJsonSchema,
+        responseJsonSchema: opts.task?.jsonSchema ?? itineraryJsonSchema,
         temperature: 0.6,
         // Gemini 3 "thinks" before writing; on busy days a full think can take minutes. The prompt is
         // explicit enough that low thinking plans just as well and starts streaming far sooner.

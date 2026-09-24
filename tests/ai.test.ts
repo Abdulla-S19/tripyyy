@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { DayExtractor } from "@/lib/ai/day-stream";
-import { buildTripPrompt } from "@/lib/ai/prompt";
+import { buildTripPrompt, SYSTEM_PROMPT } from "@/lib/ai/prompt";
 import { itineraryJsonSchema, normalizeItinerary } from "@/lib/ai/schema";
 import { sampleItinerary, sampleTrip } from "./helpers";
 
@@ -56,6 +56,17 @@ describe("prompt", () => {
   it("includes the traveller's own moods and flags them", () => {
     const p = buildTripPrompt(sampleTrip({ customMoods: ["Tea estates"] }));
     assert.match(p, /Moods: Mountain, Tea estates \(the last ones were written by the traveller/);
+  });
+
+  it("explains each chosen mood, and only those", () => {
+    const p = buildTripPrompt(sampleTrip({ moods: ["adventure", "cultural"] }));
+    assert.match(p, /What the moods mean:\n  - Adventure: treks, rafting[\s\S]*\n  - Cultural: heritage sites/);
+    assert.doesNotMatch(p, /  - Beach:/);
+  });
+
+  it("asks for a transport hop between places that aren't walkable", () => {
+    assert.match(SYSTEM_PROMPT, /more than a 10-minute walk apart, put a transport item between them/);
+    assert.match(SYSTEM_PROMPT, /most popular, well-reviewed and reputable/);
   });
 
   it("briefs last-mile apps when travelling without a vehicle", () => {

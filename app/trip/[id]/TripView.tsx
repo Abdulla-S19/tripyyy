@@ -15,6 +15,8 @@ import { UserMenu } from "@/components/auth/UserMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/components/providers/AppProviders";
 import { cloud } from "@/lib/cloud-client";
+import { replanDay } from "@/lib/generate-client";
+import type { Itinerary } from "@/types/itinerary";
 import { useItineraryHydrated, useItineraryStore, type SavedTrip } from "@/store/itinerary-store";
 import { BudgetPanel } from "./components/BudgetPanel";
 import { DaySection } from "./components/DaySection";
@@ -22,6 +24,7 @@ import { PrintItinerary } from "./components/PrintItinerary";
 import { PackingPanel, RentalsPanel, TipsPanel } from "./components/SidePanels";
 import { TripActions } from "./components/TripActions";
 import { TripSkeleton } from "./components/TripSkeleton";
+import { useTripWeather } from "./components/useTripWeather";
 
 const TripMap = dynamic(() => import("./components/TripMap"), {
   ssr: false,
@@ -97,8 +100,14 @@ export function TripDocument({ saved, mode }: { saved: SavedTrip; mode: "owner" 
   const [activeDay, setActiveDay] = useState(1);
   const [focus, setFocus] = useState<MapFocus | null>(null);
   const desktop = useSyncExternalStore(subscribeDesktop, isDesktop, () => false);
+  const updateTrip = useItineraryStore((s) => s.update);
+  // Changing one day: which day is busy, per-day errors, and the previous plan for Undo.
+  const [busyDay, setBusyDay] = useState<number | null>(null);
+  const [replanErrors, setReplanErrors] = useState<Record<number, string>>({});
+  const [changed, setChanged] = useState<{ day: number; prev: Itinerary } | null>(null);
 
   const days = saved?.itinerary.days;
+  const weather = useTripWeather(days);
   const stops = useMemo(() => (saved ? routeStops(saved.trip, saved.itinerary) : []), [saved]);
   const isOpen = (d: number) => open[d] ?? true;
 
@@ -133,6 +142,32 @@ export function TripDocument({ saved, mode }: { saved: SavedTrip; mode: "owner" 
   };
 
   const print = () => window.print();
+
+  // Browser copy first; account trips also save to the server, so share links show the new day.
+  const saveItinerary = (next: Itinerary) => {
+    updateTrip(id, { itinerary: next });
+    if (saved.cloud) cloud.updateItinerary(id, next).catch((e) => console.error("[replan] couldn't save to account", e));
+  };
+
+  const changeDay = async (dayNo: number, request: string) => {
+    setBusyDay(dayNo);
+    setReplanErrors((e) => ({ ...e, [dayNo]: "" }));
+    try {
+      const result = await replanDay(trip, it, dayNo, request);
+      setChanged({ day: dayNo, prev: it });
+      saveItinerary(result.itinerary);
+    } catch (e) {
+      setReplanErrors((errs) => ({ ...errs, [dayNo]: (e as Error).message }));
+    } finally {
+      setBusyDay(null);
+    }
+  };
+
+  const undoChange = () => {
+    if (!changed) return;
+    saveItinerary(changed.prev);
+    setChanged(null);
+  };
 
   const showOnMap = (f: MapFocus) => {
     setFocus(f);
@@ -294,6 +329,18 @@ export function TripDocument({ saved, mode }: { saved: SavedTrip; mode: "owner" 
                   onToggle={() => setOpen((o) => ({ ...o, [d.day]: !isOpen(d.day) }))}
                   onFocus={showOnMap}
                   active={d.day === activeDay}
+                  weather={weather[d.date]}
+                  change={
+                    mode === "owner"
+                      ? {
+                          state: { busy: busyDay === d.day, error: replanErrors[d.day] || null, changed: changed?.day === d.day },
+                          locked: busyDay !== null && busyDay !== d.day,
+                          onSubmit: (request) => void changeDay(d.day, request),
+                          onUndo: undoChange,
+                          onDismiss: () => setChanged(null),
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </div>

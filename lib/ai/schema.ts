@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { itinerarySchema, type Itinerary, type ItemKind } from "@/types/itinerary";
+import { itineraryDaySchema, itinerarySchema, type Itinerary, type ItemKind } from "@/types/itinerary";
 
 const UNSUPPORTED = new Set(["$schema", "pattern", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength"]);
 
@@ -15,6 +15,7 @@ function strip(node: unknown): unknown {
 
 /** JSON Schema for the model: structure and descriptions only; Zod enforces value rules afterwards. */
 export const itineraryJsonSchema = strip(z.toJSONSchema(itinerarySchema, { target: "draft-7" })) as Record<string, unknown>;
+export const dayJsonSchema = strip(z.toJSONSchema(itineraryDaySchema, { target: "draft-7" })) as Record<string, unknown>;
 
 const BUCKET: Record<ItemKind, keyof Omit<Itinerary["budget"], "totalPerPerson" | "note">> = {
   transport: "transport",

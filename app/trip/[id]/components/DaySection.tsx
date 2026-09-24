@@ -5,8 +5,20 @@ import { ChevronDown, MapPin } from "lucide-react";
 import { useRef } from "react";
 import { dayLabel, dayTotal, money, toFocus, type MapFocus } from "@/lib/trip-view";
 import { cn } from "@/lib/utils";
+import type { DayWeather } from "@/lib/weather";
 import type { ItineraryDay } from "@/types/itinerary";
+import { ChangeDay, type ReplanState } from "./ChangeDay";
+import { WeatherBadge, WeatherNote } from "./DayWeather";
 import { TimelineItem } from "./TimelineItem";
+
+/** Present only on the owner's view: shared pages are read-only. */
+export type DayChange = {
+  state: ReplanState;
+  locked: boolean;
+  onSubmit: (request: string) => void;
+  onUndo: () => void;
+  onDismiss: () => void;
+};
 
 export function DaySection({
   day,
@@ -15,6 +27,8 @@ export function DaySection({
   onToggle,
   onFocus,
   active,
+  weather,
+  change,
 }: {
   day: ItineraryDay;
   currency: string;
@@ -22,6 +36,8 @@ export function DaySection({
   onToggle: () => void;
   onFocus: (f: MapFocus) => void;
   active: boolean;
+  weather?: DayWeather;
+  change?: DayChange;
 }) {
   const bodyId = `day-${day.day}-body`;
 
@@ -54,7 +70,13 @@ export function DaySection({
             {day.title}
           </span>
           <span className="mt-0.5 flex items-center gap-1.5 text-xs text-slate">
-            <MapPin className="size-3" /> Night in {day.city} · {day.items.length} stops
+            <MapPin className="size-3 shrink-0" /> <span className="truncate">Night in {day.city} · {day.items.length} stops</span>
+            {weather && (
+              <>
+                <span aria-hidden>·</span>
+                <WeatherBadge w={weather} />
+              </>
+            )}
           </span>
         </span>
         <span className="hidden text-right sm:block">
@@ -74,8 +96,12 @@ export function DaySection({
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
             className="overflow-hidden"
           >
+            {weather && <WeatherNote w={weather} />}
             {day.summary && <p className="px-2 pt-4 text-sm text-slate sm:px-4">{day.summary}</p>}
-            <DayTimeline day={day} currency={currency} onFocus={onFocus} />
+            {change && <ChangeDay dayNo={day.day} {...change} />}
+            <div aria-busy={change?.state.busy || undefined} className={cn("transition-opacity duration-300", change?.state.busy && "pointer-events-none opacity-40")}>
+              <DayTimeline day={day} currency={currency} onFocus={onFocus} />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

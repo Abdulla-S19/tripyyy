@@ -18,15 +18,15 @@ export const callOpenAI: ModelCaller = async (model, trip, opts) => {
       {
         model,
         instructions: SYSTEM_PROMPT,
-        input: withFeedback(buildTripPrompt(trip), opts.feedback),
-        text: { format: zodTextFormat(itinerarySchema, "itinerary") },
+        input: withFeedback(opts.task?.prompt ?? buildTripPrompt(trip), opts.feedback),
+        text: { format: zodTextFormat(opts.task?.zod ?? itinerarySchema, opts.task?.name ?? "itinerary") },
         temperature: 0.6,
       },
       { signal: opts.signal }
     );
     stream.on("response.output_text.delta", (e) => opts.onText?.(e.delta));
     const res = await stream.finalResponse();
-    if (!res.output_parsed) throw new AIError("OpenAI returned no itinerary", "invalid");
+    if (!res.output_parsed) throw new AIError(`OpenAI returned no ${opts.task?.name ?? "itinerary"}`, "invalid");
     return res.output_parsed;
   } catch (err) {
     if (err instanceof AIError) throw err;

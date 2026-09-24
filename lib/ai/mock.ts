@@ -75,12 +75,14 @@ function mockItinerary(trip: TripFormValues): Itinerary {
 export const callMock: ModelCaller = async (model, trip, opts) => {
   if (model.startsWith("fail")) throw new AIError(`Mock model ${model} is unavailable`, "upstream", 503);
   const it = mockItinerary(trip);
-  const json = JSON.stringify(it);
+  // Re-planning one day: answer with a single (clearly sample) day.
+  const answer = opts.task?.name === "day" ? { ...it.days[0], title: "Re-planned day (sample)" } : it;
+  const json = JSON.stringify(answer);
   const size = Math.ceil(json.length / 40);
   for (let i = 0; i < json.length; i += size) {
     if (opts.signal?.aborted) throw new AIError("Generation was stopped", "aborted");
     await new Promise((r) => setTimeout(r, 120));
     opts.onText?.(json.slice(i, i + size));
   }
-  return it;
+  return answer;
 };

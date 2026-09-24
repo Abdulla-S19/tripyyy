@@ -1,5 +1,19 @@
+import type { Itinerary, ItineraryDay } from "@/types/itinerary";
 import type { GenerationEvent } from "./generation-events";
 import type { TripFormValues } from "./trip-schema";
+
+/** Re-plans one day on the server; resolves to the whole updated itinerary. */
+export async function replanDay(trip: TripFormValues, itinerary: Itinerary, day: number, request: string, signal?: AbortSignal) {
+  const res = await fetch("/api/generate/day", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trip, itinerary, day, request }),
+    signal,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? `Couldn't change this day (${res.status}). Please try again.`);
+  return data as { itinerary: Itinerary; day: ItineraryDay };
+}
 
 /** POSTs the trip and yields each streamed event. Non-2xx responses become a single error event. */
 export async function* streamGeneration(trip: TripFormValues, signal: AbortSignal): AsyncGenerator<GenerationEvent> {

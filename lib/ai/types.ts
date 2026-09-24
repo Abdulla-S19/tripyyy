@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import type { TripFormValues } from "@/lib/trip-schema";
 
 export type ProviderId = "gemini" | "openai" | "mock";
@@ -5,8 +6,20 @@ export type ProviderId = "gemini" | "openai" | "mock";
 /** One entry in the fallback chain, e.g. { provider: "gemini", model: "gemini-3.6-flash" }. */
 export type ModelRef = { provider: ProviderId; model: string };
 
+/** A request other than "plan the whole trip" (e.g. re-plan one day): its own prompt and output shape. */
+export type AITask = {
+  name: string;
+  prompt: string;
+  /** For Gemini's responseJsonSchema. */
+  jsonSchema: Record<string, unknown>;
+  /** For OpenAI's strict structured output. */
+  zod: z.ZodType;
+};
+
 export type GenerateOptions = {
   feedback?: string;
+  /** Replaces the whole-trip request. */
+  task?: AITask;
   /** Called with each streamed text delta of the JSON response. */
   onText?: (delta: string) => void;
   signal?: AbortSignal;

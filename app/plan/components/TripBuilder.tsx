@@ -38,6 +38,7 @@ export function TripBuilder() {
   const auth = useAuth();
   const [generation, setGeneration] = useState<GenerationState | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const [tips, setTips] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
   const [dir, setDir] = useState(1);
@@ -79,9 +80,30 @@ export function TripBuilder() {
     window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
   };
 
+  // shouldFocus only reaches real inputs; chip groups like moods have nothing to focus, so the
+  // error could sit below the fold. Bring the first problem on the step into view instead.
+  // Error messages render a few frames after validation and then animate open. A smooth scroll
+  // started while the page is still growing gets cancelled, so wait for both before scrolling.
+  const revealFirstError = (framesLeft = 30) =>
+    requestAnimationFrame(() => {
+      const el = formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"], [role="alert"]');
+      if (!el) {
+        if (framesLeft > 0) revealFirstError(framesLeft - 1);
+        return;
+      }
+      setTimeout(() => {
+        // The whole field (data-field), so its label (e.g. "Trip mood") and options come into view too.
+        const r = (el.closest<HTMLElement>("[data-field]") ?? el).getBoundingClientRect();
+        const header = 88;
+        if (r.top >= header && r.bottom <= window.innerHeight) return;
+        window.scrollTo({ top: Math.max(0, window.scrollY + r.top - header), behavior: reduce ? "auto" : "smooth" });
+      }, 260);
+    });
+
   const next = async () => {
     const ok = await form.trigger(STEP_FIELDS[step] as FieldPath<TripFormValues>[], { shouldFocus: true });
     if (ok) move(step + 1);
+    else revealFirstError();
   };
 
   const requestPlan = async (trip: TripFormValues) => {
@@ -142,7 +164,7 @@ export function TripBuilder() {
       const bad = STEP_FIELDS.findIndex((fields) => fields.some((f) => f in errors));
       if (bad >= 0) {
         move(bad);
-        setTimeout(() => void form.trigger(STEP_FIELDS[bad] as FieldPath<TripFormValues>[], { shouldFocus: true }), 450);
+        setTimeout(() => void form.trigger(STEP_FIELDS[bad] as FieldPath<TripFormValues>[], { shouldFocus: true }).then(() => revealFirstError()), 450);
       }
     })();
 
@@ -176,6 +198,7 @@ export function TripBuilder() {
 
           <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
             <form
+              ref={formRef}
               onSubmit={onSubmit}
               noValidate
               className={"glass relative rounded-3xl p-5 shadow-card transition-opacity duration-500 sm:p-8 " + (ready ? "opacity-100" : "opacity-0")}

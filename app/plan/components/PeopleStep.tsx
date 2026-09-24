@@ -63,7 +63,7 @@ export function PeopleStep() {
         </Field>
       </div>
 
-      <div className="mt-9">
+      <div data-field className="mt-9">
         <div className="flex items-baseline justify-between">
           <p id="moods-label" className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-slate">
             Trip mood

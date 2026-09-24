@@ -21,7 +21,7 @@ export function Field({
   className?: string;
 }) {
   return (
-    <div className={cn("space-y-2", className)}>
+    <div data-field className={cn("space-y-2", className)}>
       <div className="flex items-baseline justify-between gap-3">
         <label htmlFor={htmlFor} className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-slate">
           {label}

@@ -114,7 +114,9 @@ describe("buildDayPrompt", () => {
   it("lists other days' places as off-limits and keeps the night's city", () => {
     const p = buildDayPrompt(trip, plan, 2, "");
     assert.match(p, /Do NOT repeat anything already planned on other days/);
-    assert.doesNotMatch(p, /- Day 2: /); // the day being replaced isn't in the off-limits list
+    const offLimits = p.slice(p.indexOf("Do NOT repeat"), p.indexOf("Pick different"));
+    assert.match(offLimits, /- Day 1: Dinner/);
+    assert.doesNotMatch(offLimits, /Day 2/); // the day being replaced isn't off-limits to itself
     assert.match(p, /Nothing specific\. Give a fresh, clearly different take/);
   });
 

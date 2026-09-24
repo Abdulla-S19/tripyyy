@@ -1,5 +1,6 @@
 import "server-only";
 import { dayProblems } from "@/lib/replan";
+import { roadProblems, withRoadAlerts } from "@/lib/road-alerts";
 import { tripNights, type TripFormValues } from "@/lib/trip-schema";
 import { itineraryDaySchema, itinerarySchema, type Itinerary, type ItineraryDay } from "@/types/itinerary";
 import { modelChain, runChain } from "./chain";
@@ -7,9 +8,9 @@ import { DayExtractor } from "./day-stream";
 import { callGemini } from "./gemini";
 import { callMock } from "./mock";
 import { callOpenAI } from "./openai";
-import { buildDayPrompt } from "./prompt";
+import { buildDayPrompt, drivenLegs } from "./prompt";
 import { dayJsonSchema, normalizeItinerary } from "./schema";
-import { AIError, type ModelCaller, type ProviderId } from "./types";
+import { AIError, type ModelCaller, type PromptContext, type ProviderId } from "./types";
 
 const callers: Record<ProviderId, ModelCaller> = { gemini: callGemini, openai: callOpenAI, mock: callMock };
 
@@ -19,6 +20,7 @@ export type GenerationHooks = {
   /** Streamed output so far should be discarded: a fallback model or a corrective retry is starting. */
   onRetry?: (reason: string) => void;
   signal?: AbortSignal;
+  context?: PromptContext;
 };
 
 export type GenerationResult = { itinerary: Itinerary; provider: string; model: string };
@@ -40,6 +42,7 @@ export async function generateItinerary(trip: TripFormValues, hooks: GenerationH
     const { data, ref } = await runChain(chain, callers, trip, {
       feedback,
       signal: hooks.signal,
+      context: hooks.context,
       onFallback: () => {
         extractor = new DayExtractor();
         hooks.onRetry?.("Switching to a less busy planner");
@@ -54,10 +57,15 @@ export async function generateItinerary(trip: TripFormValues, hooks: GenerationH
 
     const parsed = itinerarySchema.safeParse(data);
     if (parsed.success) {
-      const itinerary = normalizeItinerary(parsed.data, trip.budget);
+      const itinerary = finish(normalizeItinerary(parsed.data, trip.budget), trip);
       usable = { itinerary, provider: ref.provider, model: ref.model };
-      if (itinerary.days.length === expectedDays) return usable;
-      feedback = `The trip needs exactly ${expectedDays} days but you returned ${itinerary.days.length}.`;
+      const problems = [
+        ...(itinerary.days.length === expectedDays ? [] : [`The trip needs exactly ${expectedDays} days but you returned ${itinerary.days.length}.`]),
+        ...(drivenLegs(trip).length ? roadProblems(itinerary.days) : []),
+      ];
+      if (!problems.length) return usable;
+      console.warn(`[generate] plan needs another pass: ${problems.join(" | ")}`);
+      feedback = problems.join("\n");
     } else {
       feedback = parsed.error.issues
         .slice(0, 8)
@@ -68,6 +76,9 @@ export async function generateItinerary(trip: TripFormValues, hooks: GenerationH
   if (usable) return usable;
   throw new AIError(`The AI returned an itinerary we couldn't use (${feedback}).`, "invalid");
 }
+
+/** Code-side touches every plan gets: road trips get calendar and known-rule warnings on long drives. */
+const finish = (it: Itinerary, trip: TripFormValues) => (drivenLegs(trip).length ? withRoadAlerts(it) : it);
 
 export type ReplanResult = { itinerary: Itinerary; day: ItineraryDay; provider: string; model: string };
 
@@ -80,12 +91,12 @@ export async function replanDay(
   itinerary: Itinerary,
   dayNo: number,
   request: string,
-  opts: { signal?: AbortSignal; onRetry?: (reason: string) => void } = {}
+  opts: { signal?: AbortSignal; onRetry?: (reason: string) => void; context?: PromptContext } = {}
 ): Promise<ReplanResult> {
   const current = itinerary.days.find((d) => d.day === dayNo);
   if (!current) throw new AIError(`Day ${dayNo} isn't part of this trip.`, "invalid");
   const others = itinerary.days.filter((d) => d.day !== dayNo);
-  const prompt = buildDayPrompt(trip, itinerary, dayNo, request);
+  const prompt = buildDayPrompt(trip, itinerary, dayNo, request, opts.context);
   let feedback: string | undefined;
   let usable: ReplanResult | undefined;
 
@@ -110,10 +121,10 @@ export async function replanDay(
     const day: ItineraryDay = { ...parsed.data, day: dayNo, date: current.date, city: parsed.data.city || current.city };
     const days = itinerary.days.map((d) => (d.day === dayNo ? day : d));
     // The old budget note may talk about things this day no longer has; let it be recomputed.
-    const next = normalizeItinerary({ ...itinerary, days, budget: { ...itinerary.budget, note: "" } }, trip.budget);
+    const next = finish(normalizeItinerary({ ...itinerary, days, budget: { ...itinerary.budget, note: "" } }, trip.budget), trip);
     usable = { itinerary: next, day: next.days.find((d) => d.day === dayNo)!, provider: ref.provider, model: ref.model };
 
-    const problems = dayProblems(day, current, others, request, trip.currency);
+    const problems = [...dayProblems(day, current, others, request, trip.currency), ...(drivenLegs(trip).length ? roadProblems([day]) : [])];
     if (!problems.length) return usable;
     console.warn(`[replan] day ${dayNo} needs another pass: ${problems.join(" | ")}`);
     feedback = problems.join("\n");

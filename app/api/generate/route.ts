@@ -4,6 +4,7 @@ import type { GenerationEvent } from "@/lib/generation-events";
 import { currentUserId } from "@/lib/auth";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { tripNights, tripSchema, withTripDefaults, type TripFormValues } from "@/lib/trip-schema";
+import { weatherNotes } from "@/lib/weather-context";
 
 export const runtime = "nodejs";
 // One generation takes ~50–80s; allow room for a model fallback and the validation retry.
@@ -59,8 +60,10 @@ export async function POST(req: NextRequest) {
       };
       send({ type: "start", expectedDays });
       try {
+        const weather = await weatherNotes(parsed.data).catch(() => []);
         const result = await generateItinerary(parsed.data, {
           signal: req.signal,
+          context: { weather },
           onDay: (day) => send({ type: "day", day }),
           onRetry: (reason) => send({ type: "retry", reason }),
         });

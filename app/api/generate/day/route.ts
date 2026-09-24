@@ -6,6 +6,7 @@ import { currentUserId } from "@/lib/auth";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { withTripDefaults, type TripFormValues } from "@/lib/trip-schema";
 import { tooLarge } from "@/lib/trips-server";
+import { weatherNotes } from "@/lib/weather-context";
 import { itinerarySchema } from "@/types/itinerary";
 
 export const runtime = "nodejs";
@@ -39,7 +40,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const trip = withTripDefaults(input.data.trip as Partial<TripFormValues>);
-    const result = await replanDay(trip, itinerary, day, request, { signal: req.signal });
+    const weather = await weatherNotes(trip).catch(() => []);
+    const result = await replanDay(trip, itinerary, day, request, { signal: req.signal, context: { weather } });
     return NextResponse.json(result);
   } catch (err) {
     if (err instanceof AIError) {

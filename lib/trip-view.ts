@@ -167,7 +167,7 @@ export function buildIcs(it: Itinerary, id: string) {
         `DTSTART:${icsStamp(d.date, item.time)}`,
         `DTEND:${icsStamp(end.date, end.time)}`,
         `SUMMARY:${icsEscape(item.title)}`,
-        `DESCRIPTION:${icsEscape([item.detail, item.bookingTip].filter(Boolean).join("\n"))}`,
+        `DESCRIPTION:${icsEscape([item.detail, ...(item.alerts ?? []).map((a) => `Warning: ${a}`), item.bookingTip].filter(Boolean).join("\n"))}`,
         ...(item.location ? [`LOCATION:${icsEscape(item.location)}`] : []),
         "END:VEVENT"
       );

@@ -23,7 +23,7 @@ export const callGemini: ModelCaller = async (model, trip, opts) => {
   try {
     const stream = await getClient().models.generateContentStream({
       model,
-      contents: withFeedback(opts.task?.prompt ?? buildTripPrompt(trip), opts.feedback),
+      contents: withFeedback(opts.task?.prompt ?? buildTripPrompt(trip, opts.context), opts.feedback),
       config: {
         systemInstruction: SYSTEM_PROMPT,
         responseMimeType: "application/json",

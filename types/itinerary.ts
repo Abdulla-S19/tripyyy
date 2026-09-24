@@ -24,6 +24,13 @@ export const itineraryItemSchema = z.object({
   to: z.string().describe("Arrival point for transport, else empty"),
   bookingTip: z.string().describe("How/when to book or what to verify, else empty"),
   alternatives: z.array(z.string()).max(3).describe("Up to 3 alternative options, e.g. other restaurants"),
+  // Optional + nullable: trips saved before this field existed still validate, and OpenAI's strict mode accepts it.
+  alerts: z
+    .array(z.string())
+    .max(4)
+    .nullable()
+    .optional()
+    .describe("Warnings the traveller must act on for this item, mainly road legs: restrictions (night bans, e-passes, closures), traffic, safety. Empty array if none"),
 });
 
 export const itineraryDaySchema = z.object({

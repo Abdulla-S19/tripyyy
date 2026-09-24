@@ -18,7 +18,7 @@ export const callOpenAI: ModelCaller = async (model, trip, opts) => {
       {
         model,
         instructions: SYSTEM_PROMPT,
-        input: withFeedback(opts.task?.prompt ?? buildTripPrompt(trip), opts.feedback),
+        input: withFeedback(opts.task?.prompt ?? buildTripPrompt(trip, opts.context), opts.feedback),
         text: { format: zodTextFormat(opts.task?.zod ?? itinerarySchema, opts.task?.name ?? "itinerary") },
         temperature: 0.6,
       },

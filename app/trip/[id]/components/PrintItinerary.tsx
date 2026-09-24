@@ -116,6 +116,11 @@ export function PrintItinerary({ trip, itinerary: it, stops }: { trip: TripFormV
                     )}
                     {item.detail && <p>{item.detail}</p>}
                     {item.location && item.kind !== "transport" && <p className="pd-muted">{item.location}</p>}
+                    {item.alerts?.map((a) => (
+                      <p key={a} className="pd-tip">
+                        ⚠ {a}
+                      </p>
+                    ))}
                     {item.bookingTip && <p className="pd-tip">Tip: {item.bookingTip}</p>}
                     {item.alternatives.length > 0 && <p className="pd-muted">Alternatives: {item.alternatives.join(", ")}</p>}
                   </td>

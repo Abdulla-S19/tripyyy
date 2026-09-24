@@ -15,6 +15,7 @@ import {
   Ship,
   Sparkles,
   TrainFront,
+  TriangleAlert,
   UtensilsCrossed,
   type LucideIcon,
 } from "lucide-react";
@@ -136,6 +137,16 @@ export function TimelineItem({
               </span>
             )}
           </p>
+        )}
+
+        {!!item.alerts?.length && (
+          <ul aria-label="Warnings" className="mt-3 space-y-1.5 rounded-xl border border-destructive/25 bg-destructive/[0.07] px-3 py-2 text-xs leading-relaxed text-sand">
+            {item.alerts.map((a) => (
+              <li key={a} className="flex gap-2">
+                <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden /> {a}
+              </li>
+            ))}
+          </ul>
         )}
 
         {item.bookingTip && (

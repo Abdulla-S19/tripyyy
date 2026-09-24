@@ -1,8 +1,10 @@
 import { LEG_MODES, MOODS, RENTAL_CARS, TRANSPORT_MODES, currencyOf } from "@/lib/trip-options";
 import { fixedJourneys } from "@/lib/replan";
+import { calendarLines } from "@/lib/trip-calendar";
 import { addDays, tripLegs, tripNights, type TripFormValues } from "@/lib/trip-schema";
 import { dayTotal, money } from "@/lib/trip-view";
 import type { Itinerary } from "@/types/itinerary";
+import type { PromptContext } from "./types";
 
 export const SYSTEM_PROMPT = `You are TRIPYYY, an expert Indian travel planner who knows buses, trains, roads, food and local customs across India.
 You turn a traveller's brief into a complete, realistic, hour-by-hour itinerary.
@@ -29,6 +31,7 @@ Rules:
 - Every rupee must sit on an item: rental car hire, fuel and tolls go on transport items as the per-person share. The budget totals are recomputed from item costs.
 - For rental cars, fill "rentals" with 3–5 well-reviewed options available near the start city (provider, seats, price per day, rating). Otherwise return an empty array.
 - Give accurate lat/lng (decimal degrees, WGS84) for every day's city and every item with a physical place; use 0 only when truly unknown.
+- "alerts" holds warnings the traveller must act on (road restrictions, traffic, closures, safety); otherwise an empty array.
 - Use empty strings or 0 for fields that do not apply. Output only JSON that matches the schema.`;
 
 const moodLabel = (id: string) => MOODS.find((m) => m.id === id)?.label ?? id;
@@ -76,6 +79,42 @@ const STYLE_RULES: Record<string, string> = {
   - Food: fine dining, chef's tables and signature experiences; private guided tours.`,
 };
 
+const DRIVEN = new Set(["own", "rental", "bike"]);
+
+/** Legs the travellers drive (or are driven), where the route is a choice, unlike a train or bus line. */
+export function drivenLegs(trip: TripFormValues) {
+  const legs = tripLegs(trip);
+  if (trip.transport === "mix") return legs.filter((_, i) => DRIVEN.has(trip.legModes[i]));
+  return DRIVEN.has(trip.transport) ? legs : [];
+}
+
+function roadRules(trip: TripFormValues) {
+  const legs = drivenLegs(trip);
+  if (!legs.length) return "";
+  const which = trip.transport === "mix" ? ` (${legs.map((l) => `${l.from} → ${l.to}`).join(", ")})` : "";
+  return `
+Road trip rules for the driven legs${which}: the route is a choice, so plan it like an experienced local driver.
+  - Choose the best route, not just the shortest: the fastest realistic drive on good roads (4-lane highways and expressways where they exist).
+    Name it in the transport item's detail with distance and drive time, e.g. "Via NH544 (Walayar) and NH948 (Mettupalayam), 190 km, about 4h 30m".
+  - Safety first: no ghat roads, forest stretches or unlit highways after dark (sunset is about 6–6:30 pm); climb and descend hills in daylight;
+    avoid accident-prone and landslide-prone stretches, especially in the monsoon or when heavy rain is forecast; a rest or food stop every 2–2.5 hours.
+    If the traveller's departure time would put a ghat or forest section after dark, the FIRST alert on that drive must say so and give the latest
+    safe departure time (e.g. "Leave Bengaluru by 11 am to clear the Kallatti ghat before dark"), and "alternatives" must offer a safe overnight
+    halt before the ghat (e.g. "Stop the night in Mysuru and drive up at 6 am").
+  - Restrictions on the travel date: forest night-traffic bans (e.g. Bandipur–Mudumalai, 9 pm–6 am), e-pass rules (e.g. the Nilgiris, Kodaikanal),
+    limits on large vehicles on hairpin roads, interstate permits and tax for rental cars, road closures. Only state rules you are confident about;
+    for anything that changes often, tell the traveller to check before leaving.
+    A closed road cannot be driven: never schedule a drive through a road at an hour it is closed. If the departure time makes it impossible to
+    cross in time, stop for the night before it (e.g. in Mysuru or Gundlupet before Bandipur) and cross at opening time, even though that moves
+    the first night away from the destination; explain it in alerts.
+  - Traffic: use the trip calendar. Expect weekend and holiday rush on hill-station and beach roads, festival crowds (check these dates for Onam,
+    Pongal, Diwali, Dussehra, Christmas–New Year, the Sabarimala season on the Pamba routes) and city rush hours (about 8–11 am and 5–9 pm).
+    Time departures to beat them.
+  - Put every road warning in that transport item's "alerts", short and specific, e.g. "Bandipur check post closed 9 pm–6 am: cross by 8:30 pm",
+    "Weekend queues on the Ooty ghat after 10 am: leave by 7 am". Use "alternatives" for a real alternative route and why
+    (e.g. "Via Gundlupet: shorter, but closed at night").`;
+}
+
 /** Where the rental is collected and returned; a different drop city means a one-way hire. */
 function rentalHandover(trip: TripFormValues) {
   const pickup = trip.rental.pickup?.trim();
@@ -90,7 +129,7 @@ function rentalHandover(trip: TripFormValues) {
   return `${from} and return it to the same place.`;
 }
 
-export function buildTripPrompt(trip: TripFormValues) {
+export function buildTripPrompt(trip: TripFormValues, context: PromptContext = {}) {
   const legs = tripLegs(trip);
   const nights = tripNights(trip);
   const currency = currencyOf(trip.currency);
@@ -149,6 +188,14 @@ Must-see places near ${trip.destination}: ${trip.sideTrips.join(", ")}.
 Departure: ${trip.departDate} at ${trip.departTime} from ${trip.origin}
 ${returnRule}
 Dates covered: ${trip.departDate} to ${endDate} — exactly ${totalDays} day(s), numbered 1..${totalDays}.
+Trip calendar (for traffic, crowds and opening days):
+${calendarLines(Array.from({ length: totalDays }, (_, i) => addDays(trip.departDate, i))).join("\n")}${
+    context.weather?.length
+      ? `
+Weather on the trip dates (plan around it: indoor backups on rainy days, no ghat or forest drives in heavy rain):
+${context.weather.join("\n")}`
+      : ""
+  }
 
 Travellers: ${trip.adults} adult(s)${trip.children ? `, ${trip.children} child(ren) aged 2–12` : ""} (${travellers} total)
 Moods: ${moods.join(", ")}${trip.customMoods?.length ? " (the last ones were written by the traveller — take them literally)" : ""}${
@@ -162,13 +209,13 @@ Budget: ${currency.symbol}${trip.budget} per person for the whole trip (currency
 Travel style: ${STYLE_RULES[trip.travelStyle ?? "balanced"]}
   Priority when style and budget disagree: never exceed the budget for a budget-friendly trip; for other styles stay as close to the style as the budget allows and explain any downgrade in budget.note.
 Transport:
-${transport.startsWith("  -") ? transport : `  ${transport}`}
+${transport.startsWith("  -") ? transport : `  ${transport}`}${roadRules(trip)}
 
 Return the itinerary with currency "${trip.currency}".`;
 }
 
 /** Re-plan one day of an existing itinerary, keeping it joined up with the days around it. */
-export function buildDayPrompt(trip: TripFormValues, it: Itinerary, dayNo: number, request: string) {
+export function buildDayPrompt(trip: TripFormValues, it: Itinerary, dayNo: number, request: string, context: PromptContext = {}) {
   const day = it.days.find((d) => d.day === dayNo);
   if (!day) throw new Error(`Day ${dayNo} is not in this itinerary`);
   const others = it.days.filter((d) => d.day !== dayNo);
@@ -192,7 +239,7 @@ export function buildDayPrompt(trip: TripFormValues, it: Itinerary, dayNo: numbe
 
 The original trip brief, for context only (do not plan the other days again):
 """
-${buildTripPrompt(trip)}
+${buildTripPrompt(trip, context)}
 """
 
 The rest of the trip stays exactly as it is:

@@ -77,6 +77,7 @@ const s = StyleSheet.create({
   kind: { fontSize: 6.5, letterSpacing: 1, textTransform: "uppercase", color: C.muted },
   muted: { color: C.muted, fontSize: 8.5 },
   tip: { color: C.gold, fontSize: 8.5, marginTop: 1 },
+  alert: { color: "#b3261e", fontSize: 8.5, marginTop: 1 },
   cost: { width: 54, textAlign: "right", fontSize: 9, color: C.ink },
   columns: { flexDirection: "row", marginTop: 18 },
   column: { flex: 1, paddingRight: 14 },
@@ -210,6 +211,11 @@ export function TripPdf({ trip, itinerary: it, link }: { trip: TripFormValues; i
                   )}
                   {!!item.detail && <Text>{item.detail}</Text>}
                   {!!item.location && item.kind !== "transport" && <Text style={s.muted}>{item.location}</Text>}
+                  {item.alerts?.map((a) => (
+                    <Text key={a} style={s.alert}>
+                      ⚠ {a}
+                    </Text>
+                  ))}
                   {!!item.bookingTip && <Text style={s.tip}>Tip: {item.bookingTip}</Text>}
                   {item.alternatives.length > 0 && <Text style={s.muted}>Or: {item.alternatives.join(", ")}</Text>}
                 </View>

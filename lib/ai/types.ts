@@ -16,8 +16,12 @@ export type AITask = {
   zod: z.ZodType;
 };
 
+/** Facts fetched at request time that the prompt should use (e.g. the forecast for the trip dates). */
+export type PromptContext = { weather?: string[] };
+
 export type GenerateOptions = {
   feedback?: string;
+  context?: PromptContext;
   /** Replaces the whole-trip request. */
   task?: AITask;
   /** Called with each streamed text delta of the JSON response. */

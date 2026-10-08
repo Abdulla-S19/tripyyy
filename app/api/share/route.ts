@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 /**
  * Share a trip without an account: stores an ownerless snapshot behind a random link.
- * The returned revokeKey stays on the guest's device and is the only way to delete it.
+ * The returned revokeKey stays on the guest's device and is the only way to delete it.Testing
  */
 export async function POST(req: Request) {
   if (!getDb()) return fail(503, "Share links aren't set up on this server yet.");
